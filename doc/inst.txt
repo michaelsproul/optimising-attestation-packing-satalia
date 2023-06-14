@@ -1,0 +1,27 @@
+{
+  "slot": <slot_id>,
+  "unaggregated_attestations": {
+    <slot_id>: [
+      [
+        <attestation>
+      ],
+      # ...
+    ]
+  },
+  "aggregated_attestations": {
+    <slot_id>: [
+      [
+        <attestation>,
+        # ...
+      ],
+      # ...
+    ]
+  },
+  "reward_function": {
+    <epoch_id>: {
+      <attester_id>: <number>,
+      # ... (reward assumed to be 0 if attester key is missing)
+    },
+    # ... (should be limited to 2 epochs) 
+  } 
+}

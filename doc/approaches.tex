@@ -1,0 +1,641 @@
+\documentclass{article}
+
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{verbatim}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{authblk}
+\usepackage{algpseudocode}
+\usepackage{algorithm}
+
+\setlength\itemsep{1em}
+\hyphenation{E-the-re-um at-tes-ta-tion}
+
+\title{Exact Approaches for the\\Attestation Aggregation and Packing Problem}
+\author{Satalia \& Sigma Prime}
+
+\begin{document}
+
+\maketitle{}
+
+\begin{abstract}
+We explore two exact approaches for solving the Attestation Aggregation and
+Packing Problem (AAPP, \cite{Satalia22a}). Both approaches are
+optimality-preserving.
+
+The first approach (which we refer to as the \emph{MIP approach}) involves a
+first stage to deal with the \emph{aggregation} part of the problem, and a
+second stage, based on a a mixed integer programming (MIP) formulation, to deal
+with the \emph{packing} part of the problem. The second approach (which we
+refer to as the \emph{decomposition approach}) decomposes the problem into a
+main problem and many sub-problems. The main problem can be solved efficiently
+using dynamic programming, the sub-problems are are smaller instances of a
+special case of the AAPP, which can be solved optimally with any exact
+approach.
+
+The purpose of the decomposition approach is to help with the potential
+scalability issues of the MIP approach on larger instances.
+\end{abstract}
+
+\tableofcontents
+
+\newpage
+
+\section{Introduction}
+
+\newcommand{\attestations}{\ensuremath{A}}
+\newcommand{\solution}{\ensuremath{S}}
+\newcommand{\attester}{\ensuremath{v}}
+\newcommand{\attesters}[1]{\ensuremath{V_{#1}}}
+\newcommand{\allattesters}{\ensuremath{V}}
+\newcommand{\epoch}[1]{\ensuremath{e(#1)}}
+\newcommand{\attestation}{\ensuremath{a}}
+\newcommand{\data}[1]{\ensuremath{d_{#1}}}
+\newcommand{\Data}{\ensuremath{D}}
+\newcommand{\epochs}{\ensuremath{E}}
+\newcommand{\Reward}[1]{\ensuremath{R\left(#1\right)}}
+\newcommand{\reward}[2]{\ensuremath{r\left(#1, #2\right)}}
+
+The present document outlines two exact approaches for solving the Attestation
+Aggregation and Packing Problem (AAPP) defined in \cite{Satalia22a}. For
+convenience, we will not include the formal definition of the problem here.
+Instead, we will assume familiarity with \cite{Satalia22a} and commit to use
+the same notation. Where a symbol is used in different contexts, e.g., the
+symbol $e$ for epochs and set elements, the meaning will be clear from the
+context.
+
+While the main use case for the proposed exact approaches is to find optimal
+solutions to the AAPP, we will take scalability into account for practical
+reasons.
+
+\section{The MIP approach} \label{sec:mip}
+
+The MIP approach is based on the idea of re-framing the AAPP as a combination
+of an \emph{aggregation problem} and a \emph{packing problem}. This is similar
+in spirit to the approach taken by Sigma Prime's Lighthouse\footnote{Ethereum
+consensus client.}. Like Lighthouse, the MIP approach solves these two problems
+in successive stages. Unlike Lighthouse, the MIP approach is complete and is
+guaranteed to (eventually) find an optimal solution.
+
+ 
+\subsection{Observations}
+
+Let $\attestations^{\dagger} \subseteq 2^{\attestations}$ be the set of
+sets of attestations satisfying the aggregation conditions, i.e.,
+%
+\begin{equation}
+  \attestations^{\dagger} = \{ B~|~\attesters{a} \cap \attesters{b} = \emptyset
+  \land \data{a} = \data{b},~\forall a, b \in B,~B \in 2^{\attestations} \}
+\end{equation}
+%
+Note that any set $S \subseteq \attestations^{\dagger}, |S| \leq N$ is a
+feasible solution of the AAPP, and that each element of
+$\attestations^{\dagger}$ represents a valid\footnote{In the sense of the
+conditions for aggregation.} aggregated attestation. The re-framing of the AAPP
+behind the MIP approach is based on the following two Observations
+%
+\begin{enumerate}
+  \item[\textbf{O1}] Because every attestation, regardless of the size of its
+  attester set, takes up exactly one of $N$ slots within a block, including an
+  attestation $a \in \attestations^{\dagger}$ with attester set $\attesters{a}$
+  in a solution is non-worse than including an attestation $b \in
+  \attestations^{\dagger}$ with attester set $\attesters{b} \subseteq
+  \attesters{a}$,
+  \item[\textbf{O2}] An attester $\attester \in \allattesters$ appearing in a
+  solution $S$ contributes only once to the reward of that solution, regardless
+  of how many times it appears in the attester sets of attestations included in
+  $S$.
+\end{enumerate}
+%
+The consequence of \emph{O1} is that attestations that are \emph{maximal} with
+respect to attester coverage are the best (or at least non-worse) candidates
+for inclusion in a solution of the AAPP. The set of such attestations is the
+set
+%
+\begin{align}
+  \attestations^{\star} = \{ B~|~\not\exists C \in \attestations^{\dagger},
+  \attesters{B} \subset \attesters{C}, B \in \attestations^{\dagger} \}
+\end{align}
+%
+In other words, all attestations in $\attestations^{\star}$ are
+\emph{non-dominated} with respect to the coverage of their attester set, i.e.,
+they are non-worse than any other attestations in $\attestations^{\dagger}$ at
+covering their particular attester set. Note that these attestations are also
+\emph{maximally aggregated}, i.e., they cannot be aggregated with any other
+attestation in $\attestations^{\dagger}$. If they were, they wouldn't be
+maximal with respect to attester coverage\footnote{If they were, it would be
+possible to find an attestation with the same attestation data and disjoint set
+of validators to aggregate them with, which would lead to a higher attester
+coverage, which directly contraddicts the definition.}. Note that, according to
+the above definition, $\attestations^{\star}$ could contain aggregated
+attestations that are equivalent with respect to attester coverage. This is not
+a limitation for our approach.
+
+This has direct implications for the search of an \textbf{optimal} solution
+because, given a set of attestations $\attestations{}$, there is at least some
+optimal solution \solution{} to the AAPP which is a subset of
+$\attestations^{\star}$.  It has also implications for the search of a
+\textbf{good quality} (but not necessarily optimal) solutions since, due to the
+fixed capacity $N$, attestations not in $\attestations^{\star}$ are less likely
+to be part of a good-quality solution.
+
+Considering $2^{\attestations^{\star}}$, as opposed to
+$2^{\attestations^{\dagger}}$, as the search space has two main advantages
+%
+\begin{itemize}
+  \item first, the former represents a smaller search space, i.e.,
+  $|2^{\attestations^{\star}}| \leq |2^{\attestations^{\dagger}}|$, and
+  \item second, because every element of ${\attestations^{\star}}$ already
+  satisfies all the aggregation constraints, we can safely ignore them going
+  forward.
+\end{itemize}
+%
+Computing $\attestations^{\star}$ is what we refer to as the \emph{aggregation
+problem}, which is the focus of the first stage of our MIP approach.
+
+The consequence of \emph{O2} is that, once the aggregation problem has been
+solved, the AAPP reduces to choosing $N$ aggregated attestations from
+$\attestations^{\star}$ so as to maximise the reward to be gained by including
+the votes of the attesters they cover. This is a \emph{weighted maximum
+coverage problem}, which needs to be solved exactly in order for our approach
+to guarantee optimality. This is what we refer to as the \emph{packing
+problem}.
+
+\subsection{Aggregation problem} \label{sec:clique}
+
+In this section we outline a method to compute $\attestations^{\star}$ using a
+graph representation of the set of attestations \attestations{}.
+
+Let $G = (V,E)$ be an undirected graph with vertices $V$ and edges $E$, where
+$V = \attestations$, and 
+%
+\begin{equation} 
+  E = \{ (a, b)~|~\{a, b\} \in \attestations^{\dagger} \}
+\end{equation}
+%
+i.e., each vertex represents one of the attestations in \attestations{}, and each
+edge encodes the compatibility for aggregation of the attestations it connects. 
+
+A \emph{clique} of $G$ is a set $C \subseteq V$ such that each pair of vertices
+in the clique is connected by an edge, i.e., $(a, b) \in E, \forall a, b \in C,
+a \neq b$. Note that, due to our encoding of $G$, a clique represents an
+aggregate attestation from attestations in \attestations{}, and the set of all
+such attestations is $\attestations^{\dagger}$.  A \emph{maximal clique} is a
+clique that cannot be further extended with another vertex, and thus
+corresponds to a maximally aggregated attestation from \attestations{}, and the
+set of all such attestations is $\tilde{\attestations} \subseteq
+\attestations^{\dagger}$. Note that while the elements of
+$\tilde{\attestations}$ are maximally aggregated attestations, they are not
+necessarily non-dominated, and therefore $\tilde{\attestations} \supseteq
+\attestations^{\star}$. For instance, consider the two hypothetical maximally
+aggregated attestations $a, b \in \tilde{\attestations}$, their respective
+attester sets could be 
+%
+\begin{align}
+  \attesters{a} = \{ v_1, v_2, v_3 \} \\
+  \attesters{b} = \{ v_1, v_2, v_3, v_4 \}.
+\end{align}
+%
+Obviously $a$ is not maximal with respect to attester coverage, since choosing
+$b$ is non-worse than choosing $a$ in terms of covering $\{ v_1, v_2, v_3 \}$.
+In other words, $a \notin \attestations^{\star}$ but $b \in
+\attestations^{\star}$.
+
+In the following, we present a method to compute $\attestations^{\star}$ by
+first computing $\tilde{\attestations}$ by enumerating all the maximal cliques,
+and then eliminating all the aggregated attestations that are dominated with
+respect to attester coverage, i.e., those whose attester sets are proper
+subsets of of the attester set of some other attestation in
+$\tilde{\attestations}$. Again, this is not a strict requirement for the
+approach, but is likely to make the search space more compact.
+
+\paragraph{Note.}For the purpose of solving the AAPP with the MIP approach, it
+would be sufficient to choose $N$ attestations from $\attestations^{\dagger}$.
+Computing $\attestations^{\star}$ is a way to reduce the search space of the
+packing problem while preserving the optimality of the approach.
+\vspace{2em}
+
+\noindent
+Most of the existing algorithm for enumerating maximal cliques are variants of
+the Bron-Kerbosch \cite{Bron73} algorithm. This is a recursive algorithm that
+maintains three sets of vertices $R$, $P$, and $X$ respectively modeling the
+maximal clique being built, the vertices that could be included in the clique,
+and the vertices that won't be included in the clique. The essence of the
+Bron-Kerbosch algorithm is summarised in the pseudo-code below, where we denote
+by $N(v)$ the set of vertices connected by some edge to a vertex $v \in V$ of a
+given graph $G = (V,E)$.
+
+\begin{algorithm}
+\caption{Original Bron-Kerbosch}
+\begin{algorithmic}
+\Procedure{BronKerbosch}{$R, P, X$}
+\If{$P \cup X = \emptyset$}
+  \State report $R$ as maximal clique
+\EndIf
+\For{$v \in P$}
+  \State \Call{BronKerbosch}{$R \cup \{v\}$, $P \cap N(v)$, $X \cap N(v)$}
+  \State $P \gets P \setminus \{v\}$
+  \State $X \gets X \cup \{v\}$
+\EndFor
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+While the original Bron-Kerbosch algorithm would correctly produce the set of
+maximal cliques in a graph, the algorithm has been improved since its first
+inception in 1973. Two main developments are the use of \emph{pivoting}
+\cite{Koch01, Cazals05} and the use of \emph{vertex ordering}
+\cite{Eppstein11}. The above techniques can be applied to the general maximal
+clique enumeration problem and are therefore relevant for us. 
+
+\paragraph{Pivoting.}
+%
+The idea of pivoting is based on the observation that, given a vertex $p \in P
+\cup X$, any maximal clique must contain $p$ or one of its non-neighbors,
+i.e., $P \setminus N(p)$ (otherwise, the clique could be extended by adding $p$
+to it), therefore only non-neighbors of $p$ need to be explored while
+extending $R$ (otherwise a non-maximal clique is being explored). A strategy
+for choosing $p$ that has proven to be effective both theoretically and
+experimentally is to choose
+%
+\begin{equation}
+  p = \underset{p \in P \cup X}{\arg\min} |P \setminus N(p)|.
+\end{equation}
+%
+This variant would roughly translate to the following pseudo-code.
+
+\begin{algorithm}[H]
+\caption{Bron-Kerbosch with pivoting}
+\begin{algorithmic}
+\Procedure{BronKerbosch}{$R, P, X$}
+\If{$P \cup X = \emptyset$}
+  \State report $R$ as maximal clique
+\EndIf
+\State $p \gets \underset{p \in P \cup X}{\arg\min} |P \setminus N(p)|$
+\For{$v \in P \setminus N(p)$}
+  \State \Call{BronKerbosch}{$R \cup \{v\}$, $P \cap N(v)$, $X \cap N(v)$}
+  \State $P \gets P \setminus \{v\}$
+  \State $X \gets X \cup \{v\}$
+\EndFor
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Vertex ordering.}
+%
+The vertex ordering variant is based on the idea that, by choosing the ordering
+in which the recursive calls are made, i.e., by choosing the ordering in which
+vertices in $P$ are explored, one can reduce the size of the recursive search
+tree. As for the possible orderings, using a \emph{degeneracy ordering} has
+been associated with better worst-case run time guarantees. In order to obtain
+a degeneracy ordering, one approach is to start with an empty ordering and
+iteratively remove a minimum degree vertex from the graph and append it to the
+ordering until the graph is empty. This is done in the outermost level of the
+recursion, while the innermost levels still use a pivoting strategy.
+
+\begin{algorithm}[H]
+\caption{Bron-Kerbosch with ordering}
+\begin{algorithmic}
+\Procedure{BronKerboschOrdering}{$G = (V, E)$}
+\State $v_1, v_2, \dots, v_n \gets$ \Call{ComputeOrdering}{G}
+\For{$i \in \{1, \dots, n\}$}
+  \State $P \gets \{ v_j | j > i\} \cap N(v_i)$
+  \State $R \gets \{ v_i \}$
+  \State $X \gets \{ v_j | j < i\} \cap N(v_i)$
+  \State \Call{BronKerbosch}{$R, P, X$}
+\EndFor
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+Aside from the above improvements to the original Bron-Kerbosch algorithm, the
+fact that $V = \attestations{}$ allows us to consider two additional
+optimisations. First, some of the attestations in \attestations{} will
+expectedly be unaggregated, and will therefore correspond to vertices connected
+with all the vertices for attestations that do not include them, which could be
+many. This can increase the cost of enumerating all cliques, and can be handled
+as a pre-processing and a post-processing step, discussed below under
+\emph{unaggregated attestations}. Second, the aggregation conditions state that
+two vertices cannot be connected if their attestation data differs.  This means
+that $G = (V,E)$ as defined above could contain many disconnected sub-graphs
+partitioned by attestation data and, as a consequence, the set of maximal
+cliques will be partitioned in the same way. Solving the maximal clique
+enumeration for each attestation data independently reduces the size of the
+graphs to be processed, which we cover \emph{attestation data partitioning}
+below.
+
+\paragraph{Unaggregated attestations.}
+%
+We want to reduce the complexity of enumerating all the cliques for graphs
+arising in the context of the AAPP. Such graphs are of the form $G = (V =
+\attestations, E)$. In particular, we're interested in dealing with
+unaggregated attestations, which are compatible with many cliques and can
+therefore contribute to generating a large set of maximal cliques. 
+
+Let us denote by $\attestations^{1} = \{ a~|~a \in \attestations,~
+|\attesters{a}| = 1 \}$ the set of unaggregated attestations in
+$\attestations$. Our strategy for dealing with these is to remove them from $G$
+altogether, enumerate all the maximal cliques for $G^{\prime} = (\attestations
+\setminus \attestations^{1}, E^{\prime})$, where $E^{\prime} = \{ (a, b)~|~(a,
+b) \in E, a, b \in \attestations \setminus \attestations^{1} \}$, and then add
+all $a \in \attestations^{1}$ back in all the compatible cliques. We
+denote this set as $\tilde{\attestations{}^{\prime}}$.
+
+Note that in general $\tilde{\attestations{}^{\prime}} \subseteq
+\tilde{\attestations{}}$. This is not a limitation, as it can be shown that
+$\tilde{\attestations{}^{\prime}} \supseteq \attestations^{\star}$ holds. In
+other words, the additional cliques that would have been generated by
+considering $\attestations^{1}$, i.e., $\tilde{\attestations{}} \setminus
+\tilde{\attestations{}^{\prime}}$ are necessarily dominated by the ones in
+$\tilde{\attestations{}^{\prime}}$. 
+
+\paragraph{(Potential) attestation data partitioning.}
+%
+As mentioned above, the graph $G = (V, E)$ is partitioned by attestation data.
+This suggests that the maximal clique enumeration can be decomposed, which may
+have a positive impact on the performance. Let $\attestations_{d} = \{ a~|~a
+\in \attestations,~\data{a} = d \},~\forall d \in \Data$. We can then generate
+all the aggregated attestations that are maximal with respect to attester
+coverage $\attestations_{d}^{\star}$ for $\attestations_{d}$, by defining
+$G_{d} = (\attestations_{d}, E)$ where $E$ is defined in the obvious way. And
+following the approach described above. Then, the set of all maximal cliques
+for \attestations{} can be then defined as
+%
+\begin{equation}
+  \attestations^{\star} = \underset{d \in \Data}{\bigcup}
+  \attestations_{d}^{\star}.
+\end{equation}
+%
+The intuition is that calculating $\attestations_{d}^{\star},~\forall d \in
+\Data$ is more efficient than computing $\attestations^{\star}$ for
+$\attestations{}$ as a whole\footnote{This needs to be proven experimentally.}.
+
+
+\paragraph{Other approaches.}
+
+The presented algorithms are well-established, and tend to achieve good performance
+on generic graphs, and have the advantage of simplicity, which can be a
+desirable property for the type of use case discussed here.
+However more sophisticated algorithms exist.  Most of these target graphs with
+particular properties. On these graphs, these algorithms tend to provide better
+worst-case complexity guarantees.  Some others address generic graphs, and can
+provide better guarantees than the algorithms based on Bron-Kerbosch. We take
+stock of these algorithms, which can be explored in a successive phase if
+necessary.
+
+\paragraph{Note.} whichever technique is chosen to enumerate the set
+$\attestations^{\star}$, its efficiency is crucial to the viability of both
+approaches proposed here. In the following, we assume that
+$\attestations^{\star}$ has been found in a way or another, and is available as
+an input to the packing stage.
+
+\subsection{Packing problem} \label{sec:coverage}
+
+As we have mentioned above, the set of all aggregated attestations that are
+maximal with respect to attester coverage $\attestations^{\star}$ is an
+optimality-preserving subset of the search space of the AAPP. 
+%
+\newcommand{\weight}[1]{\ensuremath{w(#1)}}
+%
+Based on this premise, the AAPP can be easily formulated as a \emph{weighted
+maximum coverage problem}. 
+
+The weighted maximum coverage problem involves choosing at most $k$ from a set
+of sets $S = \{ S_1, \dots, S_n \}$, where each element $e \in \bigcup_{i \in
+\{1, \dots, n\}} S_i$ is associated with a weight $\weight{e} \in
+\mathbb{N}^{\geq 0}$. The goal of the problem is to maximise the sum of the
+weights of the elements that are part of at least one of the $k$ sets that are
+chosen to be part of the solution. Like its non-weighted variant, the weighted
+maximum coverage problem is unfortunately NP-hard. It be formulated as a mixed
+integer program (MIP) as follows
+%
+\begin{align}
+  \mathbf{maximise}~  & \underset{e \in E}{\sum}w(e_j) \cdot y_j \\ \label{eq:cov}
+  s.~t.~              & \sum x_i \leq k \\ \nonumber
+                      & \underset{e_j \in S_i}{\sum}x_i \geq y_j \\ \nonumber
+                      & y_j \in \{0, 1\}  \\ \nonumber
+                      & x_i \in \{0, 1\} \nonumber
+\end{align}
+%
+where $S = \{ S_1, \dots, S_n \}$ is the set of sets that can be included in a
+solution and $E = \{ e_1, \dots, e_m \} = \bigcup_{S_i \in S} S_i$ is the set
+of elements in any of the sets. The variables $x_i \in \{1, \dots, n\}$ and
+$y_j \in \{1, \dots, m\}$ encode, respectively, the decision to choose a set
+$S_i$ in to be part of the solution, and the fact that element $e_j$ is covered
+by the solution.
+
+\paragraph{Mapping.}Under the premise that $\attestations^{\star}$ is
+available, the mapping of the AAPP to this problem is trivial. Let $S = \{
+\attesters{a}~|~a \in \attestations^{\star} \}$, and $k = N$, where $N$ has the
+meaning defined in \cite{Satalia22a}. A solution for the weighted maximum
+coverage problem defined this way is a solution to the original AAPP.
+Moreover, an optimal solution to this problem is an optimal solution of the
+original AAPP.
+
+This formulation can be directly plugged into a MIP solver to find an optimal
+packing of $N$ maximally aggregated attestations. 
+
+\paragraph{Other exact approaches.}Of course, the weighted maximum coverage
+problem can be solved optimally by any other exact approach. Such an approach,
+e.g., constraint programming (CP), would likely benefit from a different
+modeling. In this section we focus on MIP because of the wide availability of
+these kinds of solvers.
+
+\paragraph{Greedy algorithm.} A greedy algorithm exists and is indeed the
+algorithm currently employed by the Lighthouse client developed by Sigma Prime.
+This greedy algorithm has a guaranteed approximation ration of $1 - 1/e
+\approx0.623$ of the optimum, which is not suitable for the purpose of this
+work, but may be of interest for the follow-up implementation of an efficient
+algorithm. Note that in Lighthouse, the packing problem is defined on a set of
+attestations that have been pre-aggregated heuristically, which differs from
+the approach presented here.
+
+\section{Decomposition approach}
+
+Solving the AAPP using a MIP solver may represent a suitable approach, unless
+the problem is too large. For these scenarios, we propose to use a
+decomposition approach.
+
+The main idea behind this approach is to reduce the complexity of solving the
+AAPP by separating the parts that can be handled efficiently with \emph{dynamic
+programming} from the ones that are strictly \emph{NP-hard}. In particular,
+this approach is based on the observation that, when choosing which
+attestations to include in a solution, the contribution of attestations with
+different attestation data is additive, i.e.,
+%
+\begin{equation}
+  \data{a} \neq \data{b} \Rightarrow Reward{\{ a, b \}} = \Reward{\{a\}} +
+  \Reward{\{b\}},~ \forall a, b \in \attestations.
+\end{equation}
+%
+This suggests that, by partitioning an instance of the AAPP by attestation
+data, we could re-frame it as the problem of choosing the number $q_d \in
+\mathbb{N}^{\geq 0}$ of sets of attestations to include from each
+$\attestations_{d}$, where $d \in \Data$. This is reminiscent of the Knapsack
+Problem \cite{Martello87}, which can be solved efficiently with dynamic
+programming.
+
+In order for a solution to the AAPP to be optimal, one needs to choose the
+\emph{best} $q_d$ attestations for $d \in \Data$, i.e., the ones that will
+collectively provide maximal reward. This includes of course both attestations
+in $\attestations_{d}$ but also aggregated attestations
+$\attestations_{d}^{\dagger}$ from attestations in $\attestations_{d}$.
+
+This is, once again a \emph{weighted maximum coverage problem} (albeit
+expectedly a much smaller one), and thus NP-hard. The value of this
+decomposition is that it allows us to treat the full AAPP as a combination of a
+dynamic programming problem (which we will refer to as \textbf{main problem})
+and many small NP-hard problems (which we will refer to as
+\textbf{sub-problems}), as opposed to one large NP-hard problem. This is
+typically a much better outlook.
+
+In the rest of this section, we will characterise both the main problem and the
+sub-problems. Because the former depends on the latter, we will discuss the
+sub-problems first.
+
+\subsection{Sub-problems}
+
+Let $d \in \Data$ be a unique attestation data in the input. We denote by
+$\attestations_{d}$ the set of all attestations for $d$, and $k \in
+\mathbb{N}^{\geq 0}$ a positive integer. We now consider the AAPP problem
+defined by $A = \attestations_{d}$ and $N = k$, and denote by $g(d, k)$ any
+optimal solution for such AAPP. For a given $d \in \Data$ and $k \in
+\mathbb{N}^{\geq 0}$, $g(d, k)$ can be found using the MIP approach presented
+in Section~\ref{sec:mip}, or any equivalent exact approach. 
+
+\paragraph{Note} For some $k \in \mathbb{N}^{\geq 0}$ it is possible that
+$|g(d, k)| < k$. This represents a sort of \emph{fixpoint} for $g$, and
+reflects two possible scenarios, either
+%
+\begin{itemize}
+  \item there are fewer than $k$ sets of attestations from
+  $2^{\attestations_{d}}$ to choose from, or
+  \item $\Reward{g(d, k)} = \Reward{g(d, k-1)}$, i.e., adding more sets of
+  attestations doesn't increase the value of $g(d, k)$, i.e., $\attesters{g(d,
+  k-1)} \supseteq \{ v~|~v\in \attesters{\attestations_{d}},~
+  \reward{\epoch{d}}{\attester} > 0 \}$.
+\end{itemize}
+%
+
+\subsection{Main problem}
+
+Now that we have defined the sub-problems and that we can refer to their
+optimal solutions, we have all the ingredients to define the main problem as a
+dynamic programming problem.
+
+Let $\Data = \{ d_1, \dots, d_n \}$ be a set of $n \in \mathbb{N}^{\geq 0}$
+distinct attestation data, and let $m \in \mathbb{N}^{\geq 0}$ be a
+non-negative integer. We observe that, under the premise that $g(d_i, k)$ for
+some $i \in \{1, \dots, n \}$ and some $k \in \{ 0, \dots, m \}$ is the optimal
+(most rewarding) set of $k$ aggregated attestations
+$2^{\attestations_{d}^{\dagger}}$, the AAPP reduces to finding an appropriate
+value $q_d \in \{ 0, \dots, m \}$ for every $d$ such that
+%
+\begin{equation}
+  \underset{d \in \Data}{\sum} q_d \leq m, \label{eq:capm}
+\end{equation}
+%
+in other words, $q_{d_1}, \dots, q_{d_n}$ uniquely identify a packing $S$ of at
+most $m$ aggregated attestations, where for each $d \in \Data$ we're choosing
+the $q_d$ best attestations to include. The actual packing can then be derived
+as
+%
+\begin{equation}
+   S = \underset{d \in \Data}{\bigcup} g(d, q_d).
+\end{equation}
+
+To find the optimal solution, we proceed with a dynamic programming approach.
+We denote by $f(k, m)$ the \emph{optimal} packing of $m$ aggregated
+attestations $\bigcup_{i \in 1, \dots, k} 2^{\attestations_{d_i}^{\dagger}}$
+from the attestation sets of the first $k$ attestation data.  As customary, we
+first identify a base case, and then define the non-base cases recursively.
+
+\paragraph{Base case.}
+% 
+Note that
+%
+\begin{align}
+  f(0, m) = \emptyset, \;\; \forall m \in \mathbb{N}^{\geq 0}\\
+  \Reward{f(0,m)} = 0
+\end{align}
+%
+i.e., the only solution for the main problem considering no attestation data at
+all\footnote{It is possible to define the base case as $f(1, m)$ however its
+definition is already encompassed by the definition for the non-base cases, so
+starting from 0 is more succinct.} is the empty set, which yields a reward of
+0, no matter the available capacity. 
+
+\paragraph{Non-base cases.}
+%
+Based on this, we can build our non-base case as follows
+%
+\begin{align}
+  f(k, m) = \underset{q \in \{ 0, \dots, \min\left(m, |g(k, m)|\right)
+  \}}{\arg\max}~\Reward{ f(k-1, m-q) \cup g(d_k, q) }
+\end{align}
+%
+i.e., the best packing $f(k, m)$ of at most $m$ sets of aggregatable
+attestations considering only the first $k$ attestation data $\{ d_1, \dots,
+d_k \} \subseteq \Data$ is the set that maximises the total reward that can be
+obtained by choosing the best $m-q$ aggregated attestations from
+either of the $f(k-1, m-q)$, and the best $q$ aggregated attestations
+from $g(d_k, q)$. 
+
+Note that the domain $\{0, \dots, \min\left(m, |g(k, m)|\right) \}$ of $q$
+takes into account the fact that it is possible that $g(k, m) < m$ for some
+values of $m$, and therefore adding more sets than available in $g(k, m)$ has
+no meaning. 
+
+The optimality of this approach is guaranteed by the fact that $f(k-1, m-q)$ is
+the optimal packing for attestation data $\{ d_1, \dots, d_{k-1} \}$ and a
+maximum capacity of $m-q$ and, when extending our options to attestation sets
+for $d_k$, we consider all values of $q$ from $0$ (which corresponds to not
+including any attestation set for $d_k$) to $m$ (which corresponds to choosing
+all $m$ sets from the best $m$ attestation sets for $d_k$). Note that at any
+time, only one value of $q_i,~i \in \{1, \dots, n\}$ is chosen. The fact that
+attestation sets for different attestation data do not overlap in terms of
+their contribution to a solution, means that the reward of a given packing is
+additive, and can be computed as
+%
+\begin{equation}
+  \Reward{f(k, m)} = \underset{q \in \{0, \dots, m\}}{\max} \Reward{f(k-1,
+  m-q)} + \Reward{g(d_i, q)}.
+\end{equation}
+
+It follows that $f(n, N)$, i.e., the optimal packing considering all
+attestation data and a maximum capacity of $N$ (where $N$ has the same meaning
+as in \cite{Satalia22a}), corresponds to the optimal solution of the original
+AAPP.
+
+Note that the property $|f(k, m)| \leq m$ in Equation~\ref{eq:capm} implies
+that it is possible that $|f(k, m)| < m$ for some $m \in \mathbb{N}^{\geq 0}$.
+Like for $g(\cdot, \cdot)$, this suggests a sensible stopping condition for the
+search for $f(k, m)$. This stopping condition can be used to avoid exploring
+$f(k, m+1)$ if $|f(k, m)| = |f(k, m-1)|$.
+
+\paragraph{Improvements.} Given that finding each $g(d, k)$ is NP-hard, it
+makes sense to help the MIP approach solve the sub-problems by injecting as
+much information as we can from the main problem. One information that we have
+available when requesting a $g(d, k)$ is the reward of $g(d, k-1)$, i.e.,
+$Reward(g(d, k-1))$. We know that adding more aggregated attestations
+to $g(d, k)$ must at least achieve the same reward, plus the reward to be
+obtained by greedily including the single most rewarding aggregated
+attestation not already in $g(d, k-1)$. Let denote such attestation by $g^{+}_{d,
+k-1}$. We can now inject the following additional constraint in the MIP model
+of Equation~\ref{eq:cov}
+%
+\begin{equation}
+  \underset{e \in E}{\sum}w(e_j) \cdot y_j \geq \Reward{g(d,k-1)} + \Reward{
+  g^{+}_{d,k-1}}.  
+\end{equation}
+%
+Our expectation is that such a constraint could help prune branches of
+the MIP search tree that cannot reach a better-than-greedy quality.
+
+
+\bibliographystyle{plain}
+\bibliography{approaches}
+
+\end{document}

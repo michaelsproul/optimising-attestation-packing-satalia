@@ -1,0 +1,23 @@
+\begin{thebibliography}{1}
+
+\bibitem{Forrest05}
+John Forrest and Robin Lougee-Heimer.
+\newblock Cbc user guide.
+\newblock In {\em Emerging theory, methods, and applications}, pages 257--277.
+  INFORMS, 2005.
+
+\bibitem{gurobi}
+{Gurobi Optimization, LLC}.
+\newblock {Gurobi Optimizer Reference Manual}, 2022.
+
+\bibitem{Satalia22a}
+Satalia Team.
+\newblock The attestation packing problem (abridged).
+\newblock Technical report, Satalia (NPComplete Ltd), 2022.
+
+\bibitem{Satalia22b}
+Satalia Team.
+\newblock Exact approaches for the attestation aggregation and packing problem.
+\newblock Technical report, Satalia (NPComplete Ltd), 2022.
+
+\end{thebibliography}

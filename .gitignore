@@ -1,0 +1,12 @@
+.git
+.idea
+
+
+
+# Added by cargo
+
+/target
+*.lock
+
+*.synctex.gz
+*.bak

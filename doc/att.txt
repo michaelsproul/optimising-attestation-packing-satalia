@@ -1,0 +1,11 @@
+{
+  "attesting_indices": [
+    <attester_id>,
+    # ... (1 for unaggregated attestations, >1 for aggregated ones)
+
+  ],
+  "data": {
+    "slot": <slot_id>,
+    # ... (other data needed to check aggregation eligibility)
+  }
+}
