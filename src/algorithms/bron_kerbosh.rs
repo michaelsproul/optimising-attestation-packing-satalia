@@ -98,7 +98,8 @@ fn bron_kerbosh_aux<F>(
     // modified p (p \ neighbourhood(pivot)), modified x
     let (mut ip, mut mp, mut mx) = (p.clone(), p.clone(), x.clone());
     let pivot = find_pivot(&p, &x, neighbourhoods);
-    ip.drain_filter(|e| neighbourhoods[pivot].contains(e));
+    ip.extract_if(|e| neighbourhoods[pivot].contains(e))
+        .collect::<Vec<usize>>();
 
     // while !mp.is_empty() {
     while !ip.is_empty() {
@@ -124,7 +125,8 @@ fn bron_kerbosh_aux<F>(
         // p \ { v }, x U { v }
         mp.remove(mp.iter().position(|x| *x == v).unwrap());
         ip = mp.clone();
-        ip.drain_filter(|e| neighbourhoods[pivot].contains(e));
+        ip.extract_if(|e| neighbourhoods[pivot].contains(e))
+            .collect::<Vec<usize>>();
         mx.push(v);
     }
 }
@@ -136,7 +138,8 @@ fn find_pivot(p: &[usize], x: &[usize], neighbourhoods: &[Vec<usize>]) -> usize 
     *px.iter()
         .min_by_key(|&e| {
             let mut pp = p.to_vec();
-            pp.drain_filter(|ee| neighbourhoods[*e].contains(ee));
+            pp.extract_if(|ee| neighbourhoods[*e].contains(ee))
+                .collect::<Vec<usize>>();
             pp.len()
         })
         .unwrap()
