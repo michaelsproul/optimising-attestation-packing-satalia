@@ -1,8 +1,7 @@
 #![feature(int_roundings)]
 #![feature(iter_collect_into)]
-#![feature(drain_filter)]
-#![feature(option_result_contains)]
-#![feature(hash_drain_filter)]
+#![feature(extract_if)]
+#![feature(hash_extract_if)]
 
 pub mod aapp;
 pub mod algorithms;
